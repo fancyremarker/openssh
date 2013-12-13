@@ -515,6 +515,30 @@ main() { if (NSVersionOfRunTimeLibrary("System") >= (60 << 16))
 	    [Use tunnel device compatibility to OpenBSD])
 	AC_DEFINE([SSH_TUN_PREPEND_AF], [1],
 	    [Prepend the address family to IP tunnel traffic])
+	AC_MSG_CHECKING([if we have the Security Authorization Session API])
+	AC_TRY_COMPILE([#include <Security/AuthSession.h>],
+		[SessionCreate(0, 0);],
+		[ac_cv_use_security_session_api="yes"
+		 AC_DEFINE([USE_SECURITY_SESSION_API], [1], 
+			[platform has the Security Authorization Session API])
+		 LIBS="$LIBS -framework Security"
+		 AC_MSG_RESULT([yes])],
+		[ac_cv_use_security_session_api="no"
+		 AC_MSG_RESULT([no])])
+	AC_MSG_CHECKING([if we have an in-memory credentials cache])
+	AC_TRY_COMPILE(
+		[#include <Kerberos/Kerberos.h>],
+		[cc_context_t c;
+		 (void) cc_initialize (&c, 0, NULL, NULL);],
+		[AC_DEFINE([USE_CCAPI], [1], 
+			[platform uses an in-memory credentials cache])
+		 LIBS="$LIBS -framework Security"
+		 AC_MSG_RESULT([yes])
+		 if test "x$ac_cv_use_security_session_api" = "xno"; then
+			AC_MSG_ERROR([*** Need a security framework to use the credentials cache API ***])
+		fi],
+		[AC_MSG_RESULT([no])]
+	)
 	m4_pattern_allow([AU_IPv])
 	AC_CHECK_DECL([AU_IPv4], [], 
 	    AC_DEFINE([AU_IPv4], [0], [System only supports IPv4 audit records])
@@ -1325,7 +1349,7 @@ AC_ARG_WITH([libedit],
 	[  --with-libedit[[=PATH]]   Enable libedit support for sftp],
 	[ if test "x$withval" != "xno" ; then
 		if test "x$withval" = "xyes" ; then
-			AC_PATH_PROG([PKGCONFIG], [pkg-config], [no])
+			AC_PATH_TOOL([PKGCONFIG], [pkg-config], [no])
 			if test "x$PKGCONFIG" != "xno"; then
 				AC_MSG_CHECKING([if $PKGCONFIG knows about libedit])
 			 	if "$PKGCONFIG" libedit; then
@@ -3479,6 +3503,30 @@ AC_ARG_WITH([kerberos5],
 	]
 )
 
+# Check whether user wants ConsoleKit support
+CONSOLEKIT_MSG="no"
+LIBCK_CONNECTOR=""
+AC_ARG_WITH(consolekit,
+	[  --with-consolekit       Enable ConsoleKit support],
+	[ if test "x$withval" != "xno" ; then
+		AC_PATH_TOOL([PKGCONFIG], [pkg-config], [no])
+		if test "$PKGCONFIG" != "no"; then
+			AC_MSG_CHECKING([for ck-connector])
+			if $PKGCONFIG --exists ck-connector; then
+				CKCON_CFLAGS=`$PKGCONFIG --cflags ck-connector`
+				CKCON_LIBS=`$PKGCONFIG --libs ck-connector`
+				CPPFLAGS="$CPPFLAGS $CKCON_CFLAGS"
+				SSHDLIBS="$SSHDLIBS $CKCON_LIBS"
+				AC_MSG_RESULT([yes])
+				AC_DEFINE(USE_CONSOLEKIT, 1, [Define if you want ConsoleKit support.])
+				CONSOLEKIT_MSG="yes"
+			else
+				AC_MSG_RESULT([no])
+			fi
+		fi
+	fi ]
+)
+
 # Looking for programs, paths and files
 
 PRIVSEP_PATH=/var/empty
@@ -4239,6 +4287,7 @@ echo "              MD5 password support: $MD5_MSG"
 echo "                   libedit support: $LIBEDIT_MSG"
 echo "  Solaris process contract support: $SPC_MSG"
 echo "           Solaris project support: $SP_MSG"
+echo "                ConsoleKit support: $CONSOLEKIT_MSG"
 echo "       IP address in \$DISPLAY hack: $DISPLAY_HACK_MSG"
 echo "           Translate v4 in v6 hack: $IPV4_IN6_HACK_MSG"
 echo "                  BSD Auth support: $BSD_AUTH_MSG"

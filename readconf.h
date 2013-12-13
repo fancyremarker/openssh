@@ -47,12 +47,18 @@ typedef struct {
 	int     challenge_response_authentication;
 					/* Try S/Key or TIS, authentication. */
 	int     gss_authentication;	/* Try GSS authentication */
+	int     gss_keyex;		/* Try GSS key exchange */
 	int     gss_deleg_creds;	/* Delegate GSS credentials */
+	int	gss_trust_dns;		/* Trust DNS for GSS canonicalization */
+	int	gss_renewal_rekey;	/* Credential renewal forces rekey */
+	char    *gss_client_identity;   /* Principal to initiate GSSAPI with */
+	char    *gss_server_identity;   /* GSSAPI target principal */
 	int     password_authentication;	/* Try password
 						 * authentication. */
 	int     kbd_interactive_authentication; /* Try keyboard-interactive auth. */
 	char	*kbd_interactive_devices; /* Keyboard-interactive auth devices. */
 	int     zero_knowledge_password_authentication;	/* Try jpake */
+	int	use_blacklisted_keys;	/* If true, send */
 	int     batch_mode;	/* Batch mode: do not ask for passwords. */
 	int     check_host_ip;	/* Also keep track of keys for IP address */
 	int     strict_host_key_checking;	/* Strict host key checking. */

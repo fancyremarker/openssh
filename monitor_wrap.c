@@ -318,10 +318,10 @@ mm_auth2_read_banner(void)
 	return (banner);
 }
 
-/* Inform the privileged process about service and style */
+/* Inform the privileged process about service, style, and role */
 
 void
-mm_inform_authserv(char *service, char *style)
+mm_inform_authserv(char *service, char *style, char *role)
 {
 	Buffer m;
 
@@ -330,8 +330,26 @@ mm_inform_authserv(char *service, char *style)
 	buffer_init(&m);
 	buffer_put_cstring(&m, service);
 	buffer_put_cstring(&m, style ? style : "");
+	buffer_put_cstring(&m, role ? role : "");
 
 	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_AUTHSERV, &m);
+
+	buffer_free(&m);
+}
+
+/* Inform the privileged process about role */
+
+void
+mm_inform_authrole(char *role)
+{
+	Buffer m;
+
+	debug3("%s entering", __func__);
+
+	buffer_init(&m);
+	buffer_put_cstring(&m, role ? role : "");
+
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_AUTHROLE, &m);
 
 	buffer_free(&m);
 }
@@ -1270,7 +1288,7 @@ mm_ssh_gssapi_checkmic(Gssctxt *ctx, gss_buffer_t gssbuf, gss_buffer_t gssmic)
 }
 
 int
-mm_ssh_gssapi_userok(char *user)
+mm_ssh_gssapi_userok(char *user, struct passwd *pw)
 {
 	Buffer m;
 	int authenticated = 0;
@@ -1287,6 +1305,82 @@ mm_ssh_gssapi_userok(char *user)
 	debug3("%s: user %sauthenticated",__func__, authenticated ? "" : "not ");
 	return (authenticated);
 }
+
+OM_uint32
+mm_ssh_gssapi_sign(Gssctxt *ctx, gss_buffer_desc *data, gss_buffer_desc *hash)
+{
+	Buffer m;
+
+#ifdef USE_CONSOLEKIT
+char *
+mm_consolekit_register(Session *s, const char *display)
+{
+	Buffer m;
+	char *cookie;
+
+	debug3("%s entering", __func__);
+
+	if (s->ttyfd == -1)
+		return NULL;
+	buffer_init(&m);
+	buffer_put_cstring(&m, s->tty);
+	buffer_put_cstring(&m, display != NULL ? display : "");
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_CONSOLEKIT_REGISTER, &m);
+	buffer_clear(&m);
+
+	mm_request_receive_expect(pmonitor->m_recvfd,
+	    MONITOR_ANS_CONSOLEKIT_REGISTER, &m);
+	cookie = buffer_get_string(&m, NULL);
+	buffer_free(&m);
+
+	/* treat empty cookie as missing cookie */
+	if (strlen(cookie) == 0) {
+		xfree(cookie);
+		cookie = NULL;
+	}
+	return (cookie);
+}
+#endif /* USE_CONSOLEKIT */
+	OM_uint32 major;
+	u_int len;
+
+	buffer_init(&m);
+	buffer_put_string(&m, data->value, data->length);
+
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_GSSSIGN, &m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_GSSSIGN, &m);
+
+	major = buffer_get_int(&m);
+	hash->value = buffer_get_string(&m, &len);
+	hash->length = len;
+
+	buffer_free(&m);
+
+	return(major);
+}
+
+int
+mm_ssh_gssapi_update_creds(ssh_gssapi_ccache *store)
+{
+	Buffer m;
+	int ok;
+
+	buffer_init(&m);
+
+	buffer_put_cstring(&m, store->filename ? store->filename : "");
+	buffer_put_cstring(&m, store->envvar ? store->envvar : "");
+	buffer_put_cstring(&m, store->envval ? store->envval : "");
+	
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_GSSUPCREDS, &m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_GSSUPCREDS, &m);
+
+	ok = buffer_get_int(&m);
+
+	buffer_free(&m);
+	
+	return (ok);
+}
+
 #endif /* GSSAPI */
 
 #ifdef JPAKE

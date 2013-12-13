@@ -103,13 +103,17 @@ typedef struct {
 	int     kerberos_get_afs_token;		/* If true, try to get AFS token if
 						 * authenticated with Kerberos. */
 	int     gss_authentication;	/* If true, permit GSSAPI authentication */
+	int     gss_keyex;		/* If true, permit GSSAPI key exchange */
 	int     gss_cleanup_creds;	/* If true, destroy cred cache on logout */
+	int 	gss_strict_acceptor;	/* If true, restrict the GSSAPI acceptor name */
+	int 	gss_store_rekey;
 	int     password_authentication;	/* If true, permit password
 						 * authentication. */
 	int     kbd_interactive_authentication;	/* If true, permit */
 	int     challenge_response_authentication;
 	int     zero_knowledge_password_authentication;
 					/* If true, permit jpake auth */
+	int     permit_blacklisted_keys;	/* If true, permit */
 	int     permit_empty_passwd;	/* If false, do not permit empty
 					 * passwords. */
 	int     permit_user_env;	/* If true, read ~/.ssh/environment */
@@ -161,6 +165,8 @@ typedef struct {
 	int	permit_tun;
 
 	int	num_permitted_opens;
+
+	int	debian_banner;
 
 	char   *chroot_directory;
 	char   *revoked_keys_file;
