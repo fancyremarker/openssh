@@ -144,7 +144,7 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 		/* Execute the proxy command.  Note that we gave up any
 		   extra privileges above. */
 		signal(SIGPIPE, SIG_DFL);
-		execv(argv[0], argv);
+		execvp(argv[0], argv);
 		perror(argv[0]);
 		exit(1);
 	}
@@ -556,7 +556,7 @@ ssh_exchange_identification(int timeout_ms)
 	snprintf(buf, sizeof buf, "SSH-%d.%d-%.100s%s",
 	    compat20 ? PROTOCOL_MAJOR_2 : PROTOCOL_MAJOR_1,
 	    compat20 ? PROTOCOL_MINOR_2 : minor1,
-	    SSH_VERSION, compat20 ? "\r\n" : "\n");
+	    SSH_RELEASE, compat20 ? "\r\n" : "\n");
 	if (roaming_atomicio(vwrite, connection_out, buf, strlen(buf))
 	    != strlen(buf))
 		fatal("write: %.100s", strerror(errno));
@@ -956,9 +956,12 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 			error("%s. This could either mean that", key_msg);
 			error("DNS SPOOFING is happening or the IP address for the host");
 			error("and its host key have changed at the same time.");
-			if (ip_status != HOST_NEW)
+			if (ip_status != HOST_NEW) {
 				error("Offending key for IP in %s:%lu",
 				    ip_found->file, ip_found->line);
+				error("  remove with: ssh-keygen -f \"%s\" -R %s",
+				    ip_found->file, ip);
+			}
 		}
 		/* The host key has changed. */
 		warn_changed_key(host_key);
@@ -966,6 +969,8 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 		    user_hostfiles[0]);
 		error("Offending %s key in %s:%lu", key_type(host_found->key),
 		    host_found->file, host_found->line);
+		error("  remove with: ssh-keygen -f \"%s\" -R %s",
+		    host_found->file, host);
 
 		/*
 		 * If strict host key checking is in use, the user will have
@@ -1273,7 +1278,7 @@ ssh_local_cmd(const char *args)
 	if (pid == 0) {
 		signal(SIGPIPE, SIG_DFL);
 		debug3("Executing %s -c \"%s\"", shell, args);
-		execl(shell, shell, "-c", args, (char *)NULL);
+		execlp(shell, shell, "-c", args, (char *)NULL);
 		error("Couldn't execute %s -c \"%s\": %s",
 		    shell, args, strerror(errno));
 		_exit(1);

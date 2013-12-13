@@ -1,7 +1,5 @@
-/* $Id: platform.h,v 1.7 2010/11/05 03:47:01 dtucker Exp $ */
-
 /*
- * Copyright (c) 2006 Darren Tucker.  All rights reserved.
+ * Copyright (c) 2008 Colin Watson.  All rights reserved.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,18 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <sys/types.h>
+#ifdef USE_CONSOLEKIT
 
-#include <pwd.h>
+struct Session;
 
-void platform_pre_listen(void);
-void platform_pre_fork(void);
-void platform_post_fork_parent(pid_t child_pid);
-void platform_post_fork_child(void);
-int  platform_privileged_uidswap(void);
-void platform_setusercontext(struct passwd *);
-void platform_setusercontext_post_groups(struct passwd *, const char *);
-char *platform_get_krb5_client(const char *);
-char *platform_krb5_get_principal_name(const char *);
+char *	 consolekit_register(struct Session *, const char *);
+void	 consolekit_unregister(struct Session *);
 
-
+#endif /* USE_CONSOLEKIT */
