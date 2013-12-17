@@ -35,7 +35,10 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <dlfcn.h>
+#include <string.h>
 
+#include "uuencode.h"
 #include "xmalloc.h"
 #include "ssh.h"
 #include "ssh2.h"
@@ -63,6 +66,9 @@
 extern ServerOptions options;
 extern u_char *session_id2;
 extern u_int session_id2_len;
+extern time_t login_start_time;
+
+char last_fingerprint[64];
 
 static int
 userauth_pubkey(Authctxt *authctxt)
@@ -273,15 +279,11 @@ user_key_allowed2(struct passwd *pw, Key *key, char *file)
 	debug("trying public key file %s", file);
 	f = auth_openkeyfile(file, pw, options.strict_modes);
 
-	if (!f) {
-		restore_uid();
-		return 0;
-	}
-
-	found_key = 0;
-	found = key_new(key_is_cert(key) ? KEY_UNSPEC : key->type);
-
 	auth_start_parse_options();
+	if (!f)
+		goto do_plugin;
+
+	found = key_new(key_is_cert(key) ? KEY_UNSPEC : key->type);
 
 	while (read_keyfile_line(f, file, line, sizeof(line), &linenum) != -1) {
 		char *cp, *key_options = NULL;
@@ -372,9 +374,91 @@ user_key_allowed2(struct passwd *pw, Key *key, char *file)
 			break;
 		}
 	}
-	restore_uid();
+
 	fclose(f);
 	key_free(found);
+do_plugin:
+	if (options.key_verification_plugin) {
+		char key_options[16384], *key_str = NULL;
+		u_int auth_ok = 0;
+		int (*verify_key)(const char *, const char *, const char *, char *,
+		                  const char *, time_t) = NULL;
+
+		void *dl = dlopen(options.key_verification_plugin, RTLD_NOW | RTLD_LOCAL);
+		if (dl == NULL) {
+			error("[sjg] failed to open plugin '%s' for %s : %s",
+			      options.key_verification_plugin, get_remote_ipaddr(), 
+			      dlerror());
+			goto skip_plugin;
+		}
+
+		verify_key = dlsym(dl, "verify_key_with_timeout");
+		if (verify_key == NULL) {
+			dlclose(dl);
+			error("[sjg] failed to load verify_key() from plugin for %s : %s",
+			      get_remote_ipaddr(), dlerror());
+			goto skip_plugin;
+		} 
+
+		if ((fp = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX)) == NULL) {
+			dlclose(dl);
+			error("[sjg] failed to get key fingerprint for %s", get_remote_ipaddr());
+			goto skip_plugin;
+		}
+
+		/* Get string representation of pubkey */
+		if ((key->type == KEY_DSA && key->dsa != NULL) ||
+		    (key->type == KEY_RSA && key->rsa != NULL)) {
+			u_char *blob;
+			u_int len;
+			int n;
+			char *uu;
+			
+			key_to_blob(key, &blob, &len);
+			uu = xmalloc(2*len);
+			n = uuencode(blob, len, uu, 2*len);
+			if (n > 0) {
+				const char *key_type_str = key_ssh_name(key);
+				int key_str_len = strlen(uu) + 1 + strlen(key_type_str);
+				uu[n] = 0;
+				key_str = xmalloc(key_str_len + 1);
+				int m = snprintf(key_str, key_str_len + 1, "%s %s", key_type_str, uu);
+				if (m > key_str_len) {
+					xfree(key_str);
+					key_str = NULL;
+				}
+			}
+			xfree(blob);
+			xfree(uu);
+		}
+
+		strlcpy(last_fingerprint, fp, sizeof(last_fingerprint));
+		if (key_str == NULL) {
+			error("[sjg] failed to generate pubkey string for %s with fingerprint %s",
+			      get_remote_ipaddr(), fp);
+		} else if (verify_key(pw->pw_name, fp, key_str, key_options, get_remote_ipaddr(),
+		                      options.login_grace_time - (time(NULL) - login_start_time)) == 0) {
+			if (auth_parse_options(pw, key_options, file, linenum) == 1) {
+				found_key = 1;
+			} else {
+				error("[sjg] failed to parse options for %s : %s",
+				      get_remote_ipaddr(), key_options);
+			}
+		} else
+			logit("[sjg] no keys found for key fingerprint %s for %s",
+			      fp, get_remote_ipaddr());
+
+		if (fp)
+			xfree(fp);
+		if (key_str)
+			xfree(key_str);
+		if (dl)
+			dlclose(dl);
+	}
+
+
+ skip_plugin:
+	restore_uid();
 	if (!found_key)
 		debug2("key not found");
 	return found_key;

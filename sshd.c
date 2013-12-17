@@ -143,6 +143,7 @@ int deny_severity;
 #define REEXEC_MIN_FREE_FD		(STDERR_FILENO + 4)
 
 extern char *__progname;
+extern char *last_fingerprint;
 
 /* Server configuration options. */
 ServerOptions options;
@@ -252,6 +253,9 @@ Buffer cfg;
 
 /* message to be displayed after login */
 Buffer loginmsg;
+
+/* Login start time */
+time_t login_start_time;
 
 /* Unprivileged user */
 struct passwd *privsep_pw = NULL;
@@ -363,7 +367,11 @@ grace_alarm_handler(int sig)
 		kill(pmonitor->m_pid, SIGALRM);
 
 	/* Log error and exit. */
-	sigdie("Timeout before authentication for %s", get_remote_ipaddr());
+	if (last_fingerprint && last_fingerprint[0] != '\0') {
+		sigdie("[sjg] Timeout before authentication for %s with last_fingerprint='%s'",
+		      get_remote_ipaddr(), last_fingerprint);
+	} else
+		sigdie("Timeout before authentication for %s", get_remote_ipaddr());
 }
 
 /*
@@ -1183,7 +1191,9 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 				continue;
 			}
 			if (drop_connection(startups) == 1) {
-				debug("drop connection #%d", startups);
+				char *ip = get_peer_ipaddr(*newsock);
+				error("[sjg] drop connection for %s #%d", ip, startups);
+				xfree(ip);
 				close(*newsock);
 				continue;
 			}
@@ -2020,6 +2030,7 @@ main(int ac, char **av)
 	 * are about to discover the bug.
 	 */
 	signal(SIGALRM, grace_alarm_handler);
+	login_start_time = time(NULL);
 	if (!debug_flag)
 		alarm(options.login_grace_time);
 

@@ -139,6 +139,7 @@ extern u_int utmp_len;
 extern int startup_pipe;
 extern void destroy_sensitive_data(void);
 extern Buffer loginmsg;
+extern char *last_fingerprint;
 
 /* original command from peer. */
 const char *original_command = NULL;
@@ -1926,7 +1927,8 @@ session_open(Authctxt *authctxt, int chanid)
 	Session *s = session_new();
 	debug("session_open: channel %d", chanid);
 	if (s == NULL) {
-		error("no more sessions");
+		error("[sjg] no more sessions for %s (last_fingerprint='%s')",
+		      get_remote_ipaddr(), last_fingerprint);
 		return 0;
 	}
 	s->authctxt = authctxt;

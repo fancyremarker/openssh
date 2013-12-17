@@ -62,6 +62,7 @@ initialize_server_options(ServerOptions *options)
 
 	/* Portable-specific options */
 	options->use_pam = -1;
+	options->key_verification_plugin = NULL;
 
 	/* Standard Options */
 	options->num_ports = 0;
@@ -313,6 +314,7 @@ typedef enum {
 	sBadOption,		/* == unknown option */
 	/* Portable-specific options */
 	sUsePAM,
+	sKeyVerificationPlugin,
 	/* Standard Options */
 	sPort, sHostKeyFile, sServerKeyBits, sLoginGraceTime, sKeyRegenerationTime,
 	sPermitRootLogin, sLogFacility, sLogLevel,
@@ -362,6 +364,7 @@ static struct {
 	{ "usepam", sUnsupported, SSHCFG_GLOBAL },
 #endif
 	{ "pamauthenticationviakbdint", sDeprecated, SSHCFG_GLOBAL },
+	{ "keyverificationplugin", sKeyVerificationPlugin, SSHCFG_GLOBAL },
 	/* Standard Options */
 	{ "port", sPort, SSHCFG_GLOBAL },
 	{ "hostkey", sHostKeyFile, SSHCFG_GLOBAL },
@@ -1407,6 +1410,17 @@ process_server_config_line(ServerOptions *options, char *line,
 
 	case sChrootDirectory:
 		charptr = &options->chroot_directory;
+
+		arg = strdelim(&cp);
+		if (!arg || *arg == '\0')
+			fatal("%s line %d: missing file name.",
+			    filename, linenum);
+		if (*activep && *charptr == NULL)
+			*charptr = xstrdup(arg);
+		break;
+
+	case sKeyVerificationPlugin:
+		charptr = &options->key_verification_plugin;
 
 		arg = strdelim(&cp);
 		if (!arg || *arg == '\0')

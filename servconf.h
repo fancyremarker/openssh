@@ -162,6 +162,8 @@ typedef struct {
 
 	int	use_pam;		/* Enable auth via PAM */
 
+	char   *key_verification_plugin;
+
 	int	permit_tun;
 
 	int	num_permitted_opens;

@@ -4,7 +4,7 @@ To apply Debian patches:
 
 To apply brew2deb patches:
 
-    patch -p1 < path/to/sjg-key-verification-plugin.patch
+    patch -p1 --no-backup-if-mismatch < path/to/sjg-key-verification-plugin.patch
 
 To generate a brew2deb-style patch file from changes:
 
