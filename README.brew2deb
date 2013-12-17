@@ -1,0 +1,11 @@
+To apply Debian patches:
+
+    sh apply-debian-patch.sh
+
+To apply brew2deb patches:
+
+    patch -p1 < path/to/sjg-key-verification-plugin.patch
+
+To generate a brew2deb-style patch file from changes:
+
+    git diff > path/to/sjg-key-verification-plugin.patch
